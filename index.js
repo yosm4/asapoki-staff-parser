@@ -2,20 +2,8 @@ const RssParser = require('rss-parser');
 
 const rssParser = new RssParser();
 
-const NEWS = 'https://www.omnycontent.com/d/playlist/1e3bd144-9b57-451a-93cf-ac0e00e74446/50382bb4-3af3-4250-8ddc-ac0f0033ceb5/684015f9-2396-4ac4-bc1f-ac0f0033d08c/podcast.rss';
-const MEDIATALK = 'https://www.omnycontent.com/d/playlist/1e3bd144-9b57-451a-93cf-ac0e00e74446/50382bb4-3af3-4250-8ddc-ac0f0033ceb5/07a1de49-67cf-4714-8581-ac1000059302/podcast.rss';
-const SDGS = 'https://www.omnycontent.com/d/playlist/1e3bd144-9b57-451a-93cf-ac0e00e74446/50382bb4-3af3-4250-8ddc-ac0f0033ceb5/07a1de49-67cf-4714-8581-ac1000059302/podcast.rss';
-
-let url = '';
-if(process.argv.length < 3){
-  url = NEWS;
-} else {
-  url = process.argv[2];
-}
-
-
 let stories = [];
-rssParser.parseURL(url)
+rssParser.parseURL('https://www.omnycontent.com/d/playlist/1e3bd144-9b57-451a-93cf-ac0e00e74446/50382bb4-3af3-4250-8ddc-ac0f0033ceb5/684015f9-2396-4ac4-bc1f-ac0f0033d08c/podcast.rss')
   .then((feed) => {
     feed.items.forEach( item => {
       let story = {};
@@ -61,26 +49,60 @@ rssParser.parseURL(url)
       stories.push(story);
     })
   })
-  .then(() => console.info(JSON.stringify(stories)))
+  .then(() => console.log(JSON.stringify(stories)))
 
 function getStaff(line){
   const McEditRE = /MC・音源編集/;
+  const ActEditRE = /取材・音源編集/;
   const EditRE = /音源編集/;
   const MCRE= /MC/;
 
-  if(McEditRE.test(line)){
-    let name = line.replace('MC・音源編集', "").replace('（）', "").replace('()', "").trim();
-    return {Name: name, role: 'MC・音源編集'};
+  let staff = {};
+  staff.role = '出演者';
+  staff.Name = line;
+
+  if(McEditRE.test(staff.Name)){
+    staff.Name = staff.Name.replace('MC・音源編集', "").replace('（）', "").replace('()', "").trim();
+    staff.role = 'MC・音源編集';
   }
-  if(EditRE.test(line)){
-    let name = line.replace('音源編集', "").replace('（）', "").replace('()', "").trim();
-    return {Name: name, role: '音源編集'};
+  if(EditRE.test(staff.Name)){
+    staff.Name = staff.Name.replace('取材・音源編集', "").replace('（）', "").replace('()', "").trim();
+    staff.role = '取材・音源編集';
   }
-  if(MCRE.test(line)){
-    let name = line.replace('MC', "").replace('（）', "").replace('()', "").trim();
-    return {Name: name, role: 'MC'};
+  if(EditRE.test(staff.Name)){
+    staff.Name = staff.Name.replace('音源編集', "").replace('（）', "").replace('()', "").trim();
+    staff.role = '音源編集';
+  }
+  if(MCRE.test(staff.Name)){
+    staff.Name = staff.Name.replace('MC', "").replace('（）', "").replace('()', "").trim();
+    staff.role = 'MC';
+  }
+  
+  const titleRE = /（(.+)）/;
+  if(titleRE.test(staff.Name)){
+    let affiliation = staff.Name.match(titleRE)[1];
+
+    const xRE = /@[a-zA-Z]/
+    if(xRE.test(affiliation)){
+      staff.twitter = affiliation;
+    } else {
+      staff.Affiliation = affiliation;
+    }
+    staff.Name = staff.Name.replace(affiliation, '').replace('（）', '').trim();
   }
 
-  return  {Name: line, role: '出演者'};
+  const urlRE = /https?:\/\/[\w!?/+\-_~;.,*&@#$%()'[\]]+/;
+  if(urlRE.test(staff.Name)) {
+    let url = staff.Name.match(urlRE)[0];
+    staff.Name = staff.Name.replace(url, "").replace('（）', '').trim();
+
+    if(url.startsWith('https://twitter.com')) {
+      staff.twitter = url;
+    } else {
+      staff.profilePage = url;
+    }
+  }
+
+  return  staff;
 
 }
